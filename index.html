@@ -23,6 +23,12 @@
         box-sizing: border-box;
       }
 
+      [hidden] { display: none !important; }
+      .season-nav { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 20px; }
+      .season-nav select { font: inherit; padding: 10px; max-width: 100%; }
+      .season-nav a { color: var(--blue); font-weight: 700; }
+      .season-notice { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+
       body {
         margin: 0;
         background:
@@ -520,10 +526,21 @@
       <header>
         <h1>Operation Independence</h1>
         <p class="subtitle">F3 Ironplains Challenge</p>
-        <p class="date-line">July 1-31, 2026</p>
-        <p id="status" class="status">Loading leaderboard...</p>
+        <p id="season-dates" class="date-line"></p>
+        <nav class="season-nav" aria-label="Annual seasons">
+          <label for="season-selector">Season
+            <select id="season-selector" disabled><option>Loading seasons…</option></select>
+          </label>
+          <a id="entry-season" hidden>Current / upcoming season</a>
+          <a href="?season=2026">Final 2026 results</a>
+        </nav>
+        <p id="status" class="status" role="status" aria-live="polite">Loading seasons...</p>
       </header>
 
+      <noscript><p>JavaScript is needed for season selection and standings. <a href="https://f3ironplains.github.io/operation-independence-public/">View the published historical website</a>.</p></noscript>
+      <section id="season-notice" class="season-notice" hidden></section>
+      <section id="future-results" hidden aria-label="Season standings"></section>
+      <div id="historical-results" hidden>
       <section class="summary-grid" aria-label="Leaderboard summary">
         <div class="summary-card">
           <span class="summary-label">Total PAX</span>
@@ -538,7 +555,7 @@
           <span id="summary-disputes" class="summary-value">-</span>
         </div>
         <div class="summary-card">
-          <span class="summary-label">Current Leader</span>
+          <span class="summary-label">Final Leader</span>
           <span id="summary-leader" class="summary-value">-</span>
         </div>
       </section>
@@ -598,6 +615,7 @@
           </li>
         </ul>
       </details>
+      </div>
 
       <dialog id="pax-dialog">
         <div class="modal-panel">
@@ -626,7 +644,8 @@
       </dialog>
     </main>
 
-    <script>
+    <script type="module">
+      import { validateManifest, selectSeason, loadSeasonResults } from "./season-model.js";
       function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, (char) => {
           return {
@@ -747,14 +766,6 @@
           .reduce((sum, item) => sum + (item.points ?? 0), 0);
       }
 
-      function getManualClaimFormUrl(entry) {
-        return (
-          "https://docs.google.com/forms/d/e/1FAIpQLSdJPzzXSCCMRFRcs63DjjIeagiT1m76G1KTrI-hEij_AXMzBw/viewform" +
-          `?usp=pp_url&entry.891155319=${encodeURIComponent(entry.displayName)}` +
-          `&entry.771084906=${encodeURIComponent(entry.userId)}`
-        );
-      }
-
       function openPaxDialog(entry) {
         const dialog = document.getElementById("pax-dialog");
         const title = document.getElementById("modal-title");
@@ -773,10 +784,7 @@
         subtitle.textContent = `${entry.totalPoints ?? 0} points | Normal AO: ${normalAo}`;
         body.innerHTML = `
           <div class="claim-action">
-            <p>Claim details are reviewed before points are added. Details are not posted publicly.</p>
-            <a class="claim-button" href="${escapeHtml(getManualClaimFormUrl(entry))}" target="_blank" rel="noopener noreferrer">
-              Submit Manual Claim
-            </a>
+            <p>Final July 2026 archive. Scoring and claim totals are preserved; this historical view does not accept new claims.</p>
           </div>
           <div class="stat-grid">
             <div class="stat"><span>Posts</span><strong>${scoring.ironplainsPosts ?? 0}</strong></div>
@@ -997,18 +1005,57 @@
         const status = document.getElementById("status");
 
         try {
-          const response = await fetch("./operation-independence-2026.json", { cache: "no-store" });
-          if (!response.ok) {
-            throw new Error(`Failed to load leaderboard JSON: ${response.status}`);
+          const response = await fetch("./seasons.json", { cache: "no-store" });
+          if (!response.ok) throw new Error("Season list unavailable. Please try again later.");
+          const manifest = validateManifest(await response.json());
+          const selector = document.getElementById("season-selector");
+          selector.innerHTML = manifest.seasons.map(season =>
+            `<option value="${season.id}">${season.year} · ${escapeHtml(season.status)}</option>`).join("");
+          selector.disabled = false;
+          selector.addEventListener("change", () => {
+            const url = new URL(window.location.href);
+            url.searchParams.set("season", selector.value);
+            window.location.assign(url);
+          });
+          const entry = document.getElementById("entry-season");
+          entry.href = `?season=${manifest.entrySeasonId}`;
+          entry.textContent = `Current / upcoming: ${manifest.entrySeasonId}`;
+          entry.hidden = false;
+          // No implicit fallback for an invalid requested season.
+          selector.selectedIndex = -1;
+          const season = selectSeason(manifest, window.location.search);
+          selector.value = season.id;
+          document.title = `${season.year} · ${season.name}`;
+          document.getElementById("season-dates").textContent = season.startsOn
+            ? `${season.startsOn} – ${season.endsOn}` : `${season.year} · Dates to be announced`;
+          const notice = document.getElementById("season-notice");
+          notice.hidden = false;
+          if (season.status === "upcoming") {
+            notice.textContent = `${season.year} is upcoming. Challenge dates, rules, AO roster, team assignments and eligibility policies await approval. No results or standings are available. Public history requires no identity approval or registration.`;
+            status.textContent = "Upcoming season · No results";
+            return;
           }
-
-          const data = await response.json();
-
-          status.textContent = formatDateTime(data.generatedAt);
+          const final = season.results?.designation === "final";
+          notice.textContent = `${season.year} · ${season.status} · ${final ? "Final results preserved. Scores and historical metadata are immutable." : "Provisional season. Results may change."}`;
+          const data = await loadSeasonResults(season);
+          if (!data) {
+            status.textContent = "Results have not been published.";
+            return;
+          }
+          status.textContent = `${final ? "Final" : "Provisional"} · ${formatDateTime(data.generatedAt)}`;
+          if (season.year !== 2026) {
+            const future = document.getElementById("future-results");
+            future.innerHTML = `<h2>${season.year} standings</h2>${data.standings.length
+              ? `<div class="table-wrap"><table aria-label="Season standings"><thead><tr><th>PAX</th><th>Points</th></tr></thead><tbody>${data.standings.map(row => `<tr><td>${escapeHtml(row.publicName)}</td><td>${escapeHtml(row.totalPoints)}</td></tr>`).join("")}</tbody></table></div>`
+              : "<p>No standings published.</p>"}`;
+            future.hidden = false;
+            return;
+          }
           renderSummary(data);
           renderLeaderboard(data.leaderboard ?? []);
           renderTeams(data.teams ?? [], data.leaderboard ?? []);
           renderClaims(data.disputedClaims ?? []);
+          document.getElementById("historical-results").hidden = false;
 
           document.getElementById("leaderboard-body").addEventListener("click", (event) => {
             const button = event.target.closest(".pax-button");

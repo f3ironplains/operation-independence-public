@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "entrySeasonId": "2027",
+  "defaultSeasonId": "2026",
+  "seasons": [
+    {
+      "id": "2026",
+      "year": 2026,
+      "name": "Operation Independence",
+      "startsOn": "2026-07-01",
+      "endsOn": "2026-07-31",
+      "status": "archived",
+      "results": {
+        "path": "operation-independence-2026.json",
+        "sha256": "b6f66a02d9b3c673cba480d1918442779f931ccb70b2c0ff7deb5ea49e498713",
+        "designation": "final",
+        "finalizedAt": null
+      }
+    },
+    {
+      "id": "2027",
+      "year": 2027,
+      "name": "Operation Independence",
+      "startsOn": null,
+      "endsOn": null,
+      "status": "upcoming",
+      "results": null
+    }
+  ]
+}
