@@ -21,8 +21,8 @@
       "id": "2027",
       "year": 2027,
       "name": "Operation Independence",
-      "startsOn": null,
-      "endsOn": null,
+      "startsOn": "2027-07-01",
+      "endsOn": "2027-07-31",
       "status": "upcoming",
       "results": null
     }

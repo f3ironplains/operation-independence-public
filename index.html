@@ -1027,11 +1027,13 @@
           selector.value = season.id;
           document.title = `${season.year} · ${season.name}`;
           document.getElementById("season-dates").textContent = season.startsOn
-            ? `${season.startsOn} – ${season.endsOn}` : `${season.year} · Dates to be announced`;
+            ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
+              .formatRange(new Date(season.startsOn), new Date(season.endsOn)).replace(/\s*–\s*/g, "–")
+            : `${season.year} · Dates to be announced`;
           const notice = document.getElementById("season-notice");
           notice.hidden = false;
           if (season.status === "upcoming") {
-            notice.textContent = `${season.year} is upcoming. Challenge dates, rules, AO roster, team assignments and eligibility policies await approval. No results or standings are available. Public history requires no identity approval or registration.`;
+            notice.textContent = `${season.year} is upcoming. Rules and scoring details are still being finalized. No results are published for this upcoming season.`;
             status.textContent = "Upcoming season · No results";
             return;
           }
